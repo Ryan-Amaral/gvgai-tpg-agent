@@ -61,7 +61,7 @@ public class APIExecutionExample {
 					// The "game" string should be unique to the game the Team just played.
 					// In single-game learning just make it static, but when you move on to
 					// playing multiple games, you'll need to make sure the labels are correct.
-					tpg.reward("game", reward);
+					tpg.reward("game", reward, true);
 				}
 			}
 

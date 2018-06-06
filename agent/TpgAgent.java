@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 
 import org.json.JSONArray;
@@ -24,13 +25,28 @@ public class TpgAgent {
     public static final int STEPREC_DIF = 50; // number of frames to take off of step rec
     public static final int DEF_EPS = 1; // default number of episodes per individual
     public static final int DEF_REPS = 6; // default number of reps per set for sequences
-    public static final boolean QUICKIE = true; // whether to do single frame episodes
+    public static final boolean QUICKIE = false; // whether to do single frame episodes
     
     public static enum LevelType{SingleLevel, FiveLevel};
-    public static enum TrainType{DeathSequence, AllLevels, LevelPerGen};
+    public static enum TrainType{DeathSequence, AllLevels, LevelPerGen, MultiGame};
 
     public static void main(String[] args) {
-        runTpg(5001, false, "aliens", true, 1000, LevelType.FiveLevel, TrainType.DeathSequence);
+        HashMap<String, String> argMap = new HashMap<String, String>();
+        // default values
+        argMap.put("port", "5000");
+        argMap.put("game", "butterflies");
+        for(String arg : args) {
+            if(arg.startsWith("port=")) {
+                argMap.put("port", arg.substring(5));
+            }else if(arg.startsWith("game=")) {
+                argMap.put("game", arg.substring(5));
+            }
+        }
+        try {
+            runTpg(Integer.parseInt(argMap.get("port")), true, argMap.get("game"), false, 10000, LevelType.FiveLevel, TrainType.DeathSequence);
+        }catch(Exception e){
+            System.out.println("Wrong!!! Do this: \"java -jar name.jar <game>\"");
+        }
     }
     
     public static void runTpg(int port, boolean wtf, String gameName, boolean render, 
@@ -64,8 +80,17 @@ public class TpgAgent {
                     new File("/home/ryan/tpg-playing-records/" + gameName + "/" + fileName));
             System.setOut(pToFile);
         } catch (FileNotFoundException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            try {
+                // https://stackoverflow.com/questions/7488559/current-timestamp-as-filename-in-java
+                String fileName = new SimpleDateFormat("yyyyMMddHHmm'.txt'").format(new Date());
+                //throw new FileNotFoundException();
+                PrintStream pToFile = new PrintStream(
+                        new File("/home/amaral/tpg-playing-records/" + gameName + "/" + fileName));
+                System.setOut(pToFile);
+            } catch (FileNotFoundException e1) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
         }
     }
     
@@ -114,6 +139,10 @@ public class TpgAgent {
         if(trainType == TrainType.DeathSequence) {
             runGenerationsDeathSequence(gens, render, lvlIds, numsActions, agent);
         }
+    }
+    
+    public static void runGenerationsMultiGame() {
+        
     }
     
     public static void runGenerationsDeathSequence(int gens, boolean render, 
