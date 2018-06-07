@@ -20,7 +20,7 @@ import sbbj_tpg.*;
 
 public class TpgAgent {
 
-    public static final int MAX_STEPS = 1250; // max steps before game quits
+    public static final int MAX_STEPS = 1000; // max steps before game quits
     public static final int MAX_STEPREC = 20; // max amount of step recordings to take
     public static final int STEPREC_DIF = 50; // number of frames to take off of step rec
     public static final int DEF_EPS = 1; // default number of episodes per individual
@@ -42,11 +42,7 @@ public class TpgAgent {
                 argMap.put("game", arg.substring(5));
             }
         }
-        try {
-            runTpg(Integer.parseInt(argMap.get("port")), true, argMap.get("game"), false, 10000, LevelType.FiveLevel, TrainType.DeathSequence);
-        }catch(Exception e){
-            System.out.println("Wrong!!! Do this: \"java -jar name.jar <game>\"");
-        }
+        runTpg(Integer.parseInt(argMap.get("port")), true, argMap.get("game"), false, 10000, LevelType.FiveLevel, TrainType.DeathSequence);
     }
     
     public static void runTpg(int port, boolean wtf, String gameName, boolean render, 
@@ -54,21 +50,31 @@ public class TpgAgent {
         
         // write to file instead of console to record stuff
         if(wtf) {
-            wtf(gameName);
+            if(trainType != TrainType.MultiGame) {
+                wtf(gameName);
+            }else {
+                wtf("multigame");
+            }
         }
         
         GymJavaHttpClient.baseUrl = "http://127.0.0.1:" + String.valueOf(port);
-        
-        String[] lvlIds = getLevelIds(gameName, levelType); // store IDs of create level environments
-        
-        // number of action that can be performed in the environment
-        long[] numsActions = getNumsActions(lvlIds);
         
         // set up tpg agent
         TPGAlgorithm tpgAlg = new TPGAlgorithm("parameters.arg", "learn");
         TPGLearn tpg = setupTpgLearn(6, tpgAlg); // 6 actions in gvgai
         
-        runGenerations(generations, trainType, render, lvlIds, numsActions, tpg);
+        if(trainType == TrainType.MultiGame) {
+            String[] games = gameName.split(",");
+            HashMap<String,String[]> lvlIds = getLevelsIds(games, levelType);
+            HashMap<String,Long> numsActions = getNumsActions(lvlIds);
+            runGenerationsMultiGame(generations, render, lvlIds, numsActions, tpg);
+        } else {
+            String[] lvlIds = getLevelIds(gameName, levelType); // store IDs of create level environments
+            long[] numsActions = getNumsActions(lvlIds); // number of action that can be performed in the environment
+            if(trainType == TrainType.DeathSequence) {
+                runGenerationsDeathSequence(generations, render, lvlIds, numsActions, tpg);
+            }
+        }
     }
     
     public static void wtf(String gameName) {
@@ -111,11 +117,44 @@ public class TpgAgent {
         return lvlIds;
     }
     
+    public static HashMap<String,String[]> getLevelsIds(String[] gameNames, LevelType levelType) {
+        HashMap<String,String[]> levelsIds = new HashMap<String,String[]>();
+        if(levelType == LevelType.FiveLevel) {
+            for(String game : gameNames) {
+                levelsIds.put(game, 
+                        new String[] {
+                            GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl0-v0"),
+                            GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl1-v0"),
+                            GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl2-v0"),
+                            GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl3-v0"),
+                            GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl4-v0")});
+            }
+        }else if(levelType == LevelType.SingleLevel) {
+            for(String game : gameNames) {
+                levelsIds.put(game, 
+                        new String[] {
+                            GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl0-v0")});
+            }
+        }
+        
+        return levelsIds;
+    }
+    
     public static long[] getNumsActions(String[] lvlIds) {
         long[] numsActions = new long[lvlIds.length];
         for(int i = 0; i < lvlIds.length; i++) {
             numsActions[i] = 
                     (long)GymJavaHttpClient.actionSpaceSize((JSONObject)GymJavaHttpClient.actionSpace(lvlIds[i]));
+        }
+        
+        return numsActions;
+    }
+    
+    public static HashMap<String,Long> getNumsActions(HashMap<String,String[]> lvlIds) {
+        HashMap<String,Long> numsActions = new HashMap<String,Long>();
+        String[] games = (String[]) lvlIds.keySet().toArray();
+        for(String game : games) {
+            numsActions.put(game, (long)GymJavaHttpClient.actionSpaceSize((JSONObject)GymJavaHttpClient.actionSpace(game)));
         }
         
         return numsActions;
@@ -141,7 +180,9 @@ public class TpgAgent {
         }
     }
     
-    public static void runGenerationsMultiGame() {
+    public static void runGenerationsMultiGame(int gens, boolean render, 
+            String[][] lvlIds, long[] numActions,TPGLearn agent) {
+        
         
     }
     
@@ -231,7 +272,7 @@ public class TpgAgent {
                             rwd += step.reward;
                         }
                         info = step.info;
-                        if(QUICKIE) {
+                        if(QUICKIE || stepC >= MAX_STEPS) {
                             break;
                         }
                     } // episode done
@@ -310,7 +351,11 @@ public class TpgAgent {
     
     public static boolean didIWin(Object info) {
         JSONObject jinfo = (JSONObject)info;
-        return jinfo.getString("winner").equals("PLAYER_WINS");
+        try {
+            return jinfo.getString("winner").equals("PLAYER_WINS");
+        }finally {
+            return false;
+        }
     }
     
     public static double[] getFeatures(Object obs) {
