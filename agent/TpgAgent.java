@@ -10,6 +10,11 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Random;
+import java.util.Set;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -22,13 +27,16 @@ public class TpgAgent {
 
     public static final int MAX_STEPS = 1000; // max steps before game quits
     public static final int MAX_STEPREC = 20; // max amount of step recordings to take
-    public static final int STEPREC_DIF = 50; // number of frames to take off of step rec
+    public static final int BEST_STEPREC = 10; // max amount of step recordings to take after fitness
+    public static final int STEPREC_DIF = 20; // number of frames to take off of step rec
     public static final int DEF_EPS = 1; // default number of episodes per individual
     public static final int DEF_REPS = 6; // default number of reps per set for sequences
     public static final boolean QUICKIE = false; // whether to do single frame episodes
     
     public static enum LevelType{SingleLevel, FiveLevel};
     public static enum TrainType{DeathSequence, AllLevels, LevelPerGen, MultiGame};
+    
+    public static Random rand;
 
     public static void main(String[] args) {
         HashMap<String, String> argMap = new HashMap<String, String>();
@@ -42,6 +50,7 @@ public class TpgAgent {
                 argMap.put("game", arg.substring(5));
             }
         }
+        rand = new Random(55);
         runTpg(Integer.parseInt(argMap.get("port")), true, argMap.get("game"), false, 10000, LevelType.FiveLevel, TrainType.DeathSequence);
     }
     
@@ -66,7 +75,7 @@ public class TpgAgent {
         if(trainType == TrainType.MultiGame) {
             String[] games = gameName.split(",");
             HashMap<String,String[]> lvlIds = getLevelsIds(games, levelType);
-            HashMap<String,Long> numsActions = getNumsActions(lvlIds);
+            HashMap<String,long[]> numsActions = getNumsActionsMap(lvlIds);
             runGenerationsMultiGame(generations, render, lvlIds, numsActions, tpg);
         } else {
             String[] lvlIds = getLevelIds(gameName, levelType); // store IDs of create level environments
@@ -150,13 +159,18 @@ public class TpgAgent {
         return numsActions;
     }
     
-    public static HashMap<String,Long> getNumsActions(HashMap<String,String[]> lvlIds) {
-        HashMap<String,Long> numsActions = new HashMap<String,Long>();
-        String[] games = (String[]) lvlIds.keySet().toArray();
+    public static HashMap<String,long[]> getNumsActionsMap(HashMap<String,String[]> lvlIds) {
+        Set<String> games = lvlIds.keySet();
+        HashMap<String,long[]> numsActions = new HashMap<String,long[]>();
         for(String game : games) {
-            numsActions.put(game, (long)GymJavaHttpClient.actionSpaceSize((JSONObject)GymJavaHttpClient.actionSpace(game)));
+            // get actionspace of first level in each game
+            long[] actions = new long[GymJavaHttpClient.actionSpaceSize((JSONObject)GymJavaHttpClient.actionSpace(lvlIds.get(game)[0]))];
+            for(int i = 0; i < actions.length; i++) {
+                actions[i] = (long)i;
+            }
+            numsActions.put(game, actions);
         }
-        
+        // heyyyyyyyyyy
         return numsActions;
     }
     
@@ -181,11 +195,224 @@ public class TpgAgent {
     }
     
     public static void runGenerationsMultiGame(int gens, boolean render, 
-            String[][] lvlIds, long[] numActions,TPGLearn agent) {
+            HashMap<String, String[]> lvlIds, HashMap<String, long[]> numsActions,TPGLearn agent) {
         
+        String genSummaries = new String(); // performance of each generation (min, max, avg)
         
+        // record steps (which are sequences)
+        ArrayList<ArrayList<Integer>> stepSeqs = new ArrayList<ArrayList<Integer>>();
+        
+        ArrayList<String> gamesList = new ArrayList<String>(lvlIds.keySet());
+        // order to choose games
+        LinkedList<String> gameQueue = getGameQueue(gamesList);
+
+        String game = "";
+        int lvlIdx = 0;
+        String lvl = "";
+        long[] curActions = null;
+        for(int gen = 0; gen < gens; gen++) {
+            System.out.println("==================================================");
+            System.out.println("Starting Generation #" + gen);
+            int rep = gen % DEF_REPS;
+            
+            Float[] fitnesses = new Float[agent.remainingTeams()]; // track fitness of all individuals per gen
+            
+            // choose new game and level maybe
+            if(rep == 0) { 
+                if(gameQueue.isEmpty()) {
+                    gameQueue = getGameQueue(gamesList);
+                }
+                game = gameQueue.removeFirst();
+                curActions = numsActions.get(game); // actions for this game
+                lvlIdx = rand.nextInt(lvlIds.get(game).length); // choose random level
+                lvl = lvlIds.get(game)[lvlIdx];
+            }
+            System.out.println("On Game: " + game);
+            System.out.println("On Level: " + lvlIdx);
+            
+            // used for  rep 1 of death sequence for point population fitness
+            int[] epLosses = null;
+            if(rep == 1) { // on rep 1 we use epVars to find fitness of sequences
+                epLosses = new int[stepSeqs.size()];
+            }
+            
+            // eps is number of sequences we do, or just 1 if rep 0
+            int eps = 1;
+            if(rep > 0 && stepSeqs.size() > 0) {
+                eps = stepSeqs.size(); // 1 episode per sequence
+            }
+            
+            while(agent.remainingTeams() > 0) { // iterate through teams
+                System.out.println(" ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~");
+                System.out.println("Remaining Teams: " + agent.remainingTeams());
+                float reward = 0;
+                long[] ac = new long[curActions.length]; // action count
+                
+                for(int ep = 0; ep < eps; ep++) { // iterate through episodes
+                    float rwd = 0;
+                    System.out.println("starting episode #" + ep + " of " + eps);
+                    Object obs = GymJavaHttpClient.resetEnv(lvl); // reset the environment
+                    Boolean isDone = false; // whether current episode is done
+                    int action; // action for agent to do
+                    int stepC = 0; // stepCounter
+                    boolean isAutopilot = true; // for following sequence
+                    System.out.println("autopilot control");
+                    Object info = null;
+                    
+                    while(!isDone) { // iterate through environment
+                        stepC++;
+                        if(rep == 0 || stepSeqs.size() == 0 
+                                || stepC > stepSeqs.get(ep).size()) { // finished with autopilot, do tpg
+                            if(isAutopilot) {
+                                isAutopilot = false;
+                                System.out.println("tpg control");
+                            }
+                            action = (int) agent.participate(getFeatures(obs), curActions); // tpg chooses
+                            
+                            // record steps if rep 0, new sequence on first step
+                            if(rep == 0) {
+                                if(stepC == 1) {
+                                    stepSeqs.add(new ArrayList<Integer>());
+                                }
+                                stepSeqs.get(stepSeqs.size()-1).add(action);
+                            }
+                        }else{ // do autopilot, until finish sequence
+                            action = stepSeqs.get(ep).get(stepC-1);
+                        }
+                        ac[action] += 1; // track actions
+                        StepObject step = GymJavaHttpClient.stepEnv(lvl, action, true, render);
+                        obs = step.observation;
+                        isDone = step.done;
+                        if(!isAutopilot) {
+                            rwd += step.reward;
+                        }
+                        info = step.info;
+                        if(QUICKIE || stepC >= MAX_STEPS) {
+                            break;
+                        }
+                        
+                        // print progression level
+                        if(stepC == Math.floor((MAX_STEPS / 10)*1)){
+                            System.out.println("10%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*2)){
+                            System.out.println("20%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*3)){
+                            System.out.println("30%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*4)){
+                            System.out.println("40%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*5)){
+                            System.out.println("50%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*6)){
+                            System.out.println("60%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*7)){
+                            System.out.println("70%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*8)){
+                            System.out.println("80%");
+                        }else if(stepC == Math.floor((MAX_STEPS / 10)*9)){
+                            System.out.println("90%");
+                        }
+                    } // episode done
+                    reward += rwd;
+                    System.out.println("Score: " + rwd);
+                    
+                    boolean nextTeam = false;
+                    if(ep == eps - 1) {
+                        nextTeam = true;
+                    }
+                    agent.reward("ep" + Integer.toString(ep), rwd, nextTeam); // apply reward
+                    
+                    if(rep == 0) { // In rep 0 take sequences of losses
+                        fixSequence(stepSeqs, info);
+                    }else if(rep == 1) { // record in win or lose this ep
+                        if(!didIWin(info)) {
+                            epLosses[ep]++;
+                        }
+                    }
+                }
+                reward = reward / eps; // average rewards over eps
+                // print actions taken
+                System.out.print("Action Count: ");
+                for(int i = 0; i < ac.length; i++) {
+                    System.out.print(ac[i] + " ");
+                }
+                System.out.println("\nAverage Score: " + reward); // print the score
+                System.out.println();
+                
+                fitnesses[fitnesses.length - agent.remainingTeams() - 1] = reward;
+            }
+            
+            if(rep == 0 && stepSeqs.size() > 20) {
+                // take only up a certain amount
+                try {
+                    Collections.shuffle(stepSeqs); // randomize
+                    stepSeqs = new ArrayList<ArrayList<Integer>>(stepSeqs.subList(0, MAX_STEPREC));
+                }catch(Exception e) {
+                    System.out.println("Oof!");
+                }
+                System.out.println("Taking " + stepSeqs.size() + " step recordings into next generation");
+            }else if(rep == 1) {
+                // get fitness of the step sequences
+                // first find max losses
+                int max = 0;
+                for(int i = 0; i < epLosses.length; i++) {
+                    if(epLosses[i] > max) {
+                        max = epLosses[i];
+                    }
+                }
+                // now get fitnesses of each sequence
+                float[] fitness = new float[epLosses.length];
+                float lambda = 0.75f; // weight parameter for fitness
+                for(int i = 0; i < epLosses.length; i++) {
+                    fitness[i] = (float)((2*(epLosses[i]/max)/lambda) -
+                            (Math.pow((epLosses[i]/max)/lambda, 2)));
+                }
+                // bubble sort with indexes
+                int[] idxs = new int[fitness.length]; // index of fitnesses
+                for(int i = 0; i < idxs.length; i++) {
+                    idxs[i] = i;
+                }
+                float swp;
+                int swpi;
+                for(int i = 0; i < fitness.length - 1; i++) {
+                    for(int j = 0; j < fitness.length - i - 1; j++) {
+                        if(fitness[j+1] > fitness[j]) {
+                            swp = fitness[j];
+                            swpi = idxs[j];
+                            
+                            fitness[j] = fitness[j+1];
+                            idxs[j] = idxs[j+1];
+                            
+                            fitness[j+1] = swp;
+                            idxs[j] = swpi;
+                        }
+                    }
+                }
+                //delet
+                for(int i = 0; i < fitness.length; i++) {
+                    System.out.print(fitness[i] + " ");
+                }
+                // keep only the sequences that are good enough
+                int taken = 0;
+                for(int j = 0; j < idxs.length; j++) {
+                    int i = idxs[j];
+                    if(fitnesses.length - epLosses[i] <= 0 || taken >= BEST_STEPREC) {
+                        stepSeqs.remove(i);
+                    }else {
+                        taken++;
+                    }
+                }
+            }
+            
+            genSummaries += game + ": " + getSummary(fitnesses);
+            System.out.println("Fitness Summary:\n" + genSummaries);
+            // prep next generation
+            agent.selection();
+            agent.generateNewTeams();
+            agent.nextEpoch();
+        }
     }
     
+
     public static void runGenerationsDeathSequence(int gens, boolean render, 
             String[] lvlIds, long[] numsActions, TPGLearn agent){
         
@@ -338,7 +565,7 @@ public class TpgAgent {
     public static void fixSequence(ArrayList<ArrayList<Integer>> stepSeqs, Object info) {
         int stepSeqEnd = stepSeqs.size()-1; // last index
         
-        if(stepSeqs.get(stepSeqEnd).size() > STEPREC_DIF) { // chop off 50 from sequence
+        if(stepSeqs.get(stepSeqEnd).size() > STEPREC_DIF) { // chop off end from sequence
             stepSeqs.set(stepSeqEnd, new ArrayList<Integer>(
                     stepSeqs.get(stepSeqEnd).subList(
                             0, stepSeqs.get(stepSeqEnd).size()-STEPREC_DIF)));
@@ -419,5 +646,11 @@ public class TpgAgent {
         }
         
         return sum/arr.length;
+    }
+    
+
+    public static LinkedList<String> getGameQueue(ArrayList<String> keys) {
+        Collections.shuffle(keys);
+        return new LinkedList<String>(keys);
     }
 }
