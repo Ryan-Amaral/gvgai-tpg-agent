@@ -509,7 +509,6 @@ public class TPGLearn {
 		return changedTeam;
 	}
 
-	@SuppressWarnings("unused")
     public void selection() {
 		// Crate a hash map to store the Team outcome map
 		HashMap<Team, ArrayList<Double>> outcomeMap = new HashMap<Team, ArrayList<Double>>();
@@ -621,6 +620,8 @@ public class TPGLearn {
 					learner.getActionObject().team.decreaseReferences();
 			}
 		}
+		
+		labels.clear();
 	}
 
 	// Roll over to the next learning session

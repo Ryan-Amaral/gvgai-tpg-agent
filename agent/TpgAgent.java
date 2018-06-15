@@ -39,23 +39,60 @@ public class TpgAgent {
     public static Random rand;
 
     public static void main(String[] args) {
-        HashMap<String, String> argMap = new HashMap<String, String>();
+        
         // default values
-        argMap.put("port", "5000");
-        argMap.put("game", "butterflies");
+        int port = 5000;
+        boolean debug = true;
+        String game = "aliens";
+        int generations = 10000;
+        LevelType levelType = LevelType.FiveLevel;
+        TrainType trainType = TrainType.MultiGame;
+        
         for(String arg : args) {
-            if(arg.startsWith("port=")) {
-                argMap.put("port", arg.substring(5));
-            }else if(arg.startsWith("game=")) {
-                argMap.put("game", arg.substring(5));
+            if(arg.toLowerCase().startsWith("port=")) {
+                port = Integer.parseInt(arg.substring(5));
+            }else if(arg.toLowerCase().startsWith("debug=")) {
+                debug = Boolean.parseBoolean(arg.substring(6));
+            }else if(arg.toLowerCase().startsWith("game=")) {
+                game = arg.substring(5);
+            }else if(arg.toLowerCase().startsWith("gens=") || arg.toLowerCase().startsWith("generations=")) {
+                generations = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
+            }else if(arg.toLowerCase().startsWith("levellype=") || arg.toLowerCase().startsWith("ltype=")) {
+                String val = arg.substring(arg.indexOf("=") + 1);
+                if(val.equals("1") || val.toLowerCase().equals("single")) {
+                    levelType = LevelType.SingleLevel;
+                }else{
+                    levelType = LevelType.FiveLevel;
+                }
+            }else if(arg.toLowerCase().startsWith("traintype=") || arg.toLowerCase().startsWith("ttype=")) {
+                String val = arg.substring(arg.indexOf("=") + 1);
+                if(val.toLowerCase().equals("mg") || val.toLowerCase().equals("multi") || val.toLowerCase().equals("multigame")) {
+                    trainType = TrainType.MultiGame;
+                }else{
+                    trainType = TrainType.DeathSequence; // probably won't ever use anything else
+                }
             }
         }
         rand = new Random(55);
-        runTpg(Integer.parseInt(argMap.get("port")), true, argMap.get("game"), false, 10000, LevelType.FiveLevel, TrainType.DeathSequence);
+        
+        System.out.println("Starting TPG on " + "port: " + port + ", debug: " + debug + ", game: " + game
+                + ", generations: " + generations + ", LevelType: " + levelType.toString() + ", TrainType: " + trainType.toString());
+        runTpg(port, debug, game, generations, levelType, trainType);
     }
     
-    public static void runTpg(int port, boolean wtf, String gameName, boolean render, 
+    public static void runTpg(int port, boolean debug, String gameName, 
             int generations, LevelType levelType, TrainType trainType) {
+        
+        boolean wtf; // write to file
+        boolean render;
+        
+        if(debug) {
+            wtf = false;
+            render = true;
+        }else {
+            wtf = true;
+            render = false;
+        }
         
         // write to file instead of console to record stuff
         if(wtf) {
@@ -212,7 +249,7 @@ public class TpgAgent {
         long[] curActions = null;
         for(int gen = 0; gen < gens; gen++) {
             System.out.println("==================================================");
-            System.out.println("Starting Generation #" + gen);
+            System.out.println("Starting Generation #" + (gen + 1));
             int rep = gen % DEF_REPS;
             
             Float[] fitnesses = new Float[agent.remainingTeams()]; // track fitness of all individuals per gen
@@ -250,7 +287,7 @@ public class TpgAgent {
                 
                 for(int ep = 0; ep < eps; ep++) { // iterate through episodes
                     float rwd = 0;
-                    System.out.println("starting episode #" + ep + " of " + eps);
+                    System.out.println("starting episode #" + (ep + 1) + " of " + eps);
                     Object obs = GymJavaHttpClient.resetEnv(lvl); // reset the environment
                     Boolean isDone = false; // whether current episode is done
                     int action; // action for agent to do
@@ -267,7 +304,13 @@ public class TpgAgent {
                                 isAutopilot = false;
                                 System.out.println("tpg control");
                             }
+                            
+
+                            long prev = System.currentTimeMillis();
                             action = (int) agent.participate(getFeatures(obs), curActions); // tpg chooses
+                            System.out.println("TPG Time: " + (System.currentTimeMillis()-prev));
+                            
+                            
                             
                             // record steps if rep 0, new sequence on first step
                             if(rep == 0) {
@@ -280,7 +323,13 @@ public class TpgAgent {
                             action = stepSeqs.get(ep).get(stepC-1);
                         }
                         ac[action] += 1; // track actions
+                        
+                        
+                        long prev = System.currentTimeMillis();
                         StepObject step = GymJavaHttpClient.stepEnv(lvl, action, true, render);
+                        System.out.println("Game Time: " + (System.currentTimeMillis()-prev));
+                        
+                        
                         obs = step.observation;
                         isDone = step.done;
                         if(!isAutopilot) {
@@ -363,8 +412,8 @@ public class TpgAgent {
                 float[] fitness = new float[epLosses.length];
                 float lambda = 0.75f; // weight parameter for fitness
                 for(int i = 0; i < epLosses.length; i++) {
-                    fitness[i] = (float)((2*(epLosses[i]/max)/lambda) -
-                            (Math.pow((epLosses[i]/max)/lambda, 2)));
+                    fitness[i] = (float)((2*((float)epLosses[i]/max)/lambda) -
+                            (Math.pow(((float)epLosses[i]/max)/lambda, 2)));
                 }
                 // bubble sort with indexes
                 int[] idxs = new int[fitness.length]; // index of fitnesses
@@ -391,14 +440,17 @@ public class TpgAgent {
                 for(int i = 0; i < fitness.length; i++) {
                     System.out.print(fitness[i] + " ");
                 }
+                ArrayList<ArrayList<Integer>> stepSeqsCopy = stepSeqs;
+                stepSeqs = new ArrayList<ArrayList<Integer>>();
                 // keep only the sequences that are good enough
                 int taken = 0;
                 for(int j = 0; j < idxs.length; j++) {
                     int i = idxs[j];
-                    if(fitnesses.length - epLosses[i] <= 0 || taken >= BEST_STEPREC) {
-                        stepSeqs.remove(i);
-                    }else {
+                    if(fitnesses.length - epLosses[i] > 0 && taken < BEST_STEPREC) {
+                        stepSeqs.add(stepSeqsCopy.get(i));
                         taken++;
+                    }else if(taken >= BEST_STEPREC) {
+                        break;
                     }
                 }
             }
@@ -586,7 +638,7 @@ public class TpgAgent {
     }
     
     public static double[] getFeatures(Object obs) {
-        int res = 64; // x and y resolution of screen space
+        int res = 128; // x and y resolution of screen space
         double[] features = new double[res*res];
         JSONArray jObs = (JSONArray)obs;
         boolean first = true; // for getting column size first time only
