@@ -24,6 +24,8 @@ public class Team implements Comparable<Team>
 	
 	// The number of Learners currently referencing this Team
 	protected int learnerReferenceCount = 0;
+	
+	protected int genId; // Id of the team in current generation for parallelization purposes
 		
 	// Reconstruct a Team from primary data. WE'VE CREATED A MONSTER!
 	public Team( long ID, long birthday, double key, ArrayList<Learner> learners, HashMap<String, Double> outcomes )
@@ -159,7 +161,7 @@ public class Team implements Comparable<Team>
 	}
 	
 	// Provide this Team with an input state set and return an action
-	public long getAction( HashSet<Team> visited, double[] state )
+	public long getAction( HashSet<Team> visited, double[] state, int rootTeamNum)
 	{
 		Learner bestLearner = null;
 		double maxBid = 0;
@@ -182,7 +184,7 @@ public class Team implements Comparable<Team>
 				continue;
 						
 			// Otherwise we can get the Learner's bid
-			maxBid = learners.get(i).bid( state );
+			maxBid = learners.get(i).bid(state, rootTeamNum);
 
 			// We've found our starting Learner, so break
 			break;			
@@ -196,7 +198,7 @@ public class Team implements Comparable<Team>
 				continue;
 			
 			// Otherwise get the bid from this Learner
-			nextBid = learners.get(i).bid( state );
+			nextBid = learners.get(i).bid( state, rootTeamNum);
 
 			// If this bid is higher than the previous highest bid, store it and the Learner
 			if( nextBid > maxBid )
@@ -207,7 +209,7 @@ public class Team implements Comparable<Team>
 		}
 
 		// Return the action of the best Learner
-		return bestLearner.getActionObject().getAction(visited,state);
+		return bestLearner.getActionObject().getAction(visited,state,rootTeamNum);
 	}
 	
 	// This Team is being deleted. Make sure Learner references are decreased before it's gone!

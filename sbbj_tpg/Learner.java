@@ -6,8 +6,8 @@ public class Learner {
 	// The number of general purpose registers held by all Learners
 	public static final int REGISTERS = 8;
 
-	// An array representing the general purpose registers for this Learner
-	public double[] registers = null;
+    // An array representing the general purpose registers for this Learner
+	public static double[][][] registersArray = null;
 
 	// Static variable holding the next ID to be used for a new Learner
 	protected static long count = 0;
@@ -34,9 +34,6 @@ public class Learner {
 		this.action = new Action(action);
 		this.teamReferenceCount = nRefs;
 		this.program = program;
-
-		// Initialize a new set of general purpose registers
-		registers = new double[REGISTERS];
 	}
 
 	// Create a new learner, storing the time it was made, the action, and its
@@ -53,9 +50,6 @@ public class Learner {
 
 		// This Learner doesn't belong to any Teams yet
 		this.teamReferenceCount = 0;
-
-		// Initialize a new set of general purpose registers
-		registers = new double[REGISTERS];
 
 		// Create a new Instruction variable and make sure it's initialized to null
 		Instruction in = null;
@@ -95,29 +89,26 @@ public class Learner {
 		// This Learner doesn't belong to any Teams yet
 		this.teamReferenceCount = 0;
 
-		// Initialize a new set of general purpose registers
-		registers = new double[REGISTERS];
-
 		// Copy the other Learner's program
 		for (Instruction in : other.program)
 			program.add(new Instruction(in));
 	}
 
 	// Calculate a bird from the feature set
-	public double bid(double[] inputFeatures) {
+	public double bid(double[] inputFeatures, int rootTeamNum, int regNum) {
 		// Make sure all the general purpose registers are set to 0.
 		// If you want to add simple memory, comment this for loop out!
-		for (int i = 0; i < registers.length; i++)
-			registers[i] = 0;
+		for (int i = 0; i < registersArray[rootTeamNum][regNum].length; i++)
+		    registersArray[rootTeamNum][regNum][i] = 0;
 
 		// Use the Learner's program to generate a bid and return it.
 		// Uses the formula: bid = 1/(1+e^x), where x is the program output.
 		// Throw the formula into Wolfram Alpha if you don't know what it looks like.
-		return 1 / (1 + Math.exp(-run(inputFeatures)));
+		return 1 / (1 + Math.exp(-run(inputFeatures, rootTeamNum, regNum)));
 	}
 
 	// Run the program on the given input feature set and return a pre-bid output
-	protected double run(double[] inputFeatures) {
+	protected double run(double[] inputFeatures, int rootTeamNum, int regNum) {
 		Instruction mode;
 		Instruction operation;
 
@@ -133,7 +124,7 @@ public class Learner {
 			// Mode0 lets an instruction decide between using the input feature set or the
 			// general purpose registers
 			if (mode.equals(Instruction.mode0)) {
-				sourceValue = registers[(int) instruction.getSourceRegister().getLongValue() % REGISTERS];
+				sourceValue = registersArray[rootTeamNum][regNum][(int) instruction.getSourceRegister().getLongValue() % REGISTERS];
 			} else {
 				sourceValue = inputFeatures[(int) (instruction.getSourceRegister().getLongValue()
 						% inputFeatures.length)];
@@ -141,32 +132,33 @@ public class Learner {
 
 			// Perform the appropriate operation
 			if (operation.equals(Instruction.SUM))
-				registers[destinationRegister] += sourceValue;
+			    registersArray[rootTeamNum][regNum][destinationRegister] += sourceValue;
 			else if (operation.equals(Instruction.DIFF))
-				registers[destinationRegister] -= sourceValue;
+			    registersArray[rootTeamNum][regNum][destinationRegister] -= sourceValue;
 			else if (operation.equals(Instruction.PROD))
-				registers[destinationRegister] *= sourceValue;
+			    registersArray[rootTeamNum][regNum][destinationRegister] *= sourceValue;
 			else if (operation.equals(Instruction.DIV))
-				registers[destinationRegister] /= sourceValue;
+			    registersArray[rootTeamNum][regNum][destinationRegister] /= sourceValue;
 			else if (operation.equals(Instruction.COS))
-				registers[destinationRegister] = Math.cos(sourceValue);
+			    registersArray[rootTeamNum][regNum][destinationRegister] = Math.cos(sourceValue);
 			else if (operation.equals(Instruction.LOG))
-				registers[destinationRegister] = Math.log(Math.abs(sourceValue));
+			    registersArray[rootTeamNum][regNum][destinationRegister] = Math.log(Math.abs(sourceValue));
 			else if (operation.equals(Instruction.EXP))
-				registers[destinationRegister] = Math.exp(sourceValue);
+			    registersArray[rootTeamNum][regNum][destinationRegister] = Math.exp(sourceValue);
 			else if (operation.equals(Instruction.COND)) {
-				if (registers[destinationRegister] < sourceValue)
-					registers[destinationRegister] *= -1;
+				if (registersArray[rootTeamNum][regNum][destinationRegister] < sourceValue)
+				    registersArray[rootTeamNum][regNum][destinationRegister] *= -1;
 			} else {
 				throw new RuntimeException("Invalid Operation found in Learner.run()");
 			}
 
 			// If the value of registers[destination] is infinite or not a number, zero it
-			if (Double.isInfinite(registers[destinationRegister]) || Double.isNaN(registers[destinationRegister]))
-				registers[destinationRegister] = 0;
+			if (Double.isInfinite(registersArray[rootTeamNum][regNum][destinationRegister]) || 
+			        Double.isNaN(registersArray[rootTeamNum][regNum][destinationRegister]))
+			    registersArray[rootTeamNum][regNum][destinationRegister] = 0;
 		}
 
-		return registers[0];
+		return registersArray[rootTeamNum][regNum][0];
 	}
 
 	public int size() {

@@ -17,10 +17,10 @@ public class Action {
 	}
 
 	// Retrieve an action from this object
-	public long getAction(HashSet<Team> visited, double[] inputFeatures) {
+	public long getAction(HashSet<Team> visited, double[] inputFeatures, int rootTeamNum) {
 		// If we are not storing an atomic action, then this action holds a Team.
 		// Use the provided feature set to generate an action and return it.
-		return action == null ? team.getAction(visited, inputFeatures) : action;
+		return action == null ? team.getAction(visited, inputFeatures, rootTeamNum) : action;
 	}
 
 	// Returns true if this action is atomic.

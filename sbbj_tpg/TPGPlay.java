@@ -18,7 +18,7 @@ public class TPGPlay {
 			return -1;
 
 		// Give the team the input features to find an action
-		return team.getAction(new HashSet<Team>(), inputFeatures);
+		return team.getAction(new HashSet<Team>(), inputFeatures, 0);
 	}
 
 	// Print the current status of the TPG algorithm
