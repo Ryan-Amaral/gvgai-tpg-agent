@@ -98,8 +98,17 @@ public class Learner {
 	public double bid(double[] inputFeatures, int rootTeamNum, int regNum) {
 		// Make sure all the general purpose registers are set to 0.
 		// If you want to add simple memory, comment this for loop out!
-		for (int i = 0; i < registersArray[rootTeamNum][regNum].length; i++)
+	    double[] register;
+	    try {
+	        register = registersArray[rootTeamNum][regNum];
+	    }catch(ArrayIndexOutOfBoundsException e) {
+	        e.printStackTrace();
+	        regNum = 0;
+	        register = registersArray[rootTeamNum][0];
+	    }
+		for (int i = 0; i < register.length; i++) {
 		    registersArray[rootTeamNum][regNum][i] = 0;
+		}
 
 		// Use the Learner's program to generate a bid and return it.
 		// Uses the formula: bid = 1/(1+e^x), where x is the program output.

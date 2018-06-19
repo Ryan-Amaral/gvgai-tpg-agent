@@ -23,6 +23,8 @@ import javaclient.GymJavaHttpClient;
 import javaclient.StepObject;
 import sbbj_tpg.*;
 
+// https://stackoverflow.com/questions/702415/how-to-know-if-other-threads-have-finished     do # 5
+
 public class TpgAgent {
 
     public static final int MAX_STEPS = 1000; // max steps before game quits
@@ -31,7 +33,7 @@ public class TpgAgent {
     public static final int STEPREC_DIF = 20; // number of frames to take off of step rec
     public static final int DEF_EPS = 1; // default number of episodes per individual
     public static final int DEF_REPS = 6; // default number of reps per set for sequences
-    public static final boolean QUICKIE = false; // whether to do single frame episodes
+    public static final boolean QUICKIE = true; // whether to do single frame episodes
     
     public static enum LevelType{SingleLevel, FiveLevel};
     public static enum TrainType{DeathSequence, AllLevels, LevelPerGen, MultiGame};
@@ -45,7 +47,7 @@ public class TpgAgent {
         boolean debug = true;
         String game = "aliens";
         int generations = 10000;
-        LevelType levelType = LevelType.FiveLevel;
+        LevelType levelType = LevelType.SingleLevel;
         TrainType trainType = TrainType.MultiGame;
         
         for(String arg : args) {
@@ -282,6 +284,7 @@ public class TpgAgent {
             while(agent.remainingTeams() > 0) { // iterate through teams
                 System.out.println(" ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~");
                 System.out.println("Remaining Teams: " + agent.remainingTeams());
+                Team team = agent.getCurTeam();
                 float reward = 0;
                 long[] ac = new long[curActions.length]; // action count
                 
@@ -305,12 +308,7 @@ public class TpgAgent {
                                 System.out.println("tpg control");
                             }
                             
-
-                            long prev = System.currentTimeMillis();
-                            action = (int) agent.participate(getFeatures(obs), curActions); // tpg chooses
-                            System.out.println("TPG Time: " + (System.currentTimeMillis()-prev));
-                            
-                            
+                            action = (int) agent.participate(team, getFeatures(obs), curActions); // tpg chooses
                             
                             // record steps if rep 0, new sequence on first step
                             if(rep == 0) {
@@ -324,11 +322,7 @@ public class TpgAgent {
                         }
                         ac[action] += 1; // track actions
                         
-                        
-                        long prev = System.currentTimeMillis();
                         StepObject step = GymJavaHttpClient.stepEnv(lvl, action, true, render);
-                        System.out.println("Game Time: " + (System.currentTimeMillis()-prev));
-                        
                         
                         obs = step.observation;
                         isDone = step.done;
@@ -363,12 +357,7 @@ public class TpgAgent {
                     } // episode done
                     reward += rwd;
                     System.out.println("Score: " + rwd);
-                    
-                    boolean nextTeam = false;
-                    if(ep == eps - 1) {
-                        nextTeam = true;
-                    }
-                    agent.reward("ep" + Integer.toString(ep), rwd, nextTeam); // apply reward
+                    agent.reward(team, "ep" + Integer.toString(ep), rwd); // apply reward
                     
                     if(rep == 0) { // In rep 0 take sequences of losses
                         fixSequence(stepSeqs, info);
@@ -463,7 +452,6 @@ public class TpgAgent {
             agent.nextEpoch();
         }
     }
-    
 
     public static void runGenerationsDeathSequence(int gens, boolean render, 
             String[] lvlIds, long[] numsActions, TPGLearn agent){
@@ -507,6 +495,7 @@ public class TpgAgent {
             }
             
             while(agent.remainingTeams() > 0) { // iterate through teams
+                Team team = agent.getCurTeam();
                 System.out.println(" ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~");
                 System.out.println("Remaining Teams: " + agent.remainingTeams());
                 float reward = 0;
@@ -531,7 +520,7 @@ public class TpgAgent {
                                 isAutopilot = false;
                                 System.out.println("tpg control");
                             }
-                            action = (int) agent.participate(getFeatures(obs), new long[] {0,1,2,3}); // tpg chooses
+                            action = (int) agent.participate(team, getFeatures(obs), new long[] {0,1,2,3}); // tpg chooses
                             
                             // record steps if rep 0, new sequence on first step
                             if(rep == 0) {
@@ -556,12 +545,7 @@ public class TpgAgent {
                         }
                     } // episode done
                     reward += rwd;
-                    
-                    boolean nextTeam = false;
-                    if(ep == eps - 1) {
-                        nextTeam = true;
-                    }
-                    agent.reward("ep" + Integer.toString(ep), rwd, nextTeam); // apply reward
+                    agent.reward(team, "ep" + Integer.toString(ep), rwd); // apply reward
                     
                     if(rep == 0) { // In rep 0 take sequences of losses
                         fixSequence(stepSeqs, info);
@@ -700,7 +684,6 @@ public class TpgAgent {
         return sum/arr.length;
     }
     
-
     public static LinkedList<String> getGameQueue(ArrayList<String> keys) {
         Collections.shuffle(keys);
         return new LinkedList<String>(keys);

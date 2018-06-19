@@ -40,6 +40,8 @@ public class APIExecutionExample {
 
 					// Reset the reward to 0.
 					reward = 0.0;
+					
+					Team team = tpg.getCurTeam();
 
 					// This while loop would normally be while( game.episode_still_running() ), but
 					// I don't have a game to simulate for you, so here I'm simply saying that each
@@ -51,7 +53,7 @@ public class APIExecutionExample {
 						inputFeatures = new double[] { 1.1, 2.1, 3.1, 4.1, 5.1 };
 
 						// Accumulate the reward by getting TPG to play
-						reward += tpg.participate(inputFeatures);
+						reward += tpg.participate(team, inputFeatures);
 
 						// Counting down frames for testing purposes
 						count--;
@@ -61,7 +63,7 @@ public class APIExecutionExample {
 					// The "game" string should be unique to the game the Team just played.
 					// In single-game learning just make it static, but when you move on to
 					// playing multiple games, you'll need to make sure the labels are correct.
-					tpg.reward("game", reward, true);
+					tpg.reward(team, "game", reward);
 				}
 			}
 

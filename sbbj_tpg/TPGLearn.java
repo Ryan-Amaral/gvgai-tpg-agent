@@ -124,10 +124,7 @@ public class TPGLearn {
         teamQueue.addAll(rootTeams);
 
         // Make new Learner register array
-        Learner.registersArray = new double[remainingTeams()][];
-        for(int i = 0; i < Learner.registersArray.length; i++) {
-            Learner.registersArray[i] = new double[Learner.REGISTERS];
-        }
+        Learner.registersArray = new double[remainingTeams()][][];
 
         // All the Teams are generated, so move to generation 0
         epochs++;
@@ -200,14 +197,14 @@ public class TPGLearn {
     public long participate(Team team, double[] inputFeatures) {
 
         // Give the team the input features to find an action
-        return team.getAction(new HashSet<Team>(), inputFeatures, remainingTeams() - 1);
+        return team.getAction(new HashSet<Team>(), inputFeatures, team.genId);
     }
 
     // Given an input feature set and required action set, produce an action
     public long participate(Team team, double[] inputFeatures, long[] actions ){
 
         // Give the team the input features to find an action
-        long action = team.getAction(new HashSet<Team>(), inputFeatures, remainingTeams() - 1);
+        long action = team.getAction(new HashSet<Team>(), inputFeatures, team.genId);
 
         // If the team's action is in the action list, return it
         for( int i=0; i < actions.length; i++ )
@@ -234,6 +231,7 @@ public class TPGLearn {
     public Team getCurTeam() {
         Team team = teamQueue.pop();
         team.genId = remainingTeams();
+        Learner.registersArray[team.genId] = new double[team.learners.size()][Learner.REGISTERS];
         return team;
     }
 
@@ -638,9 +636,6 @@ public class TPGLearn {
 
         // Make new Learner register array
         Learner.registersArray = new double[remainingTeams()][][];
-        for(int i = 0; i < Learner.registersArray.length; i++) {
-            Learner.registersArray[i] = new double[Learner.REGISTERS];
-        }
 
         // The number of epochs increases and is returned
         return ++epochs;

@@ -184,7 +184,7 @@ public class Team implements Comparable<Team>
 				continue;
 						
 			// Otherwise we can get the Learner's bid
-			maxBid = learners.get(i).bid(state, rootTeamNum);
+			maxBid = learners.get(i).bid(state, rootTeamNum, 0);
 
 			// We've found our starting Learner, so break
 			break;			
@@ -198,7 +198,7 @@ public class Team implements Comparable<Team>
 				continue;
 			
 			// Otherwise get the bid from this Learner
-			nextBid = learners.get(i).bid( state, rootTeamNum);
+			nextBid = learners.get(i).bid( state, rootTeamNum, i);
 
 			// If this bid is higher than the previous highest bid, store it and the Learner
 			if( nextBid > maxBid )
