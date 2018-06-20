@@ -27,28 +27,28 @@ import sbbj_tpg.*;
 
 public class TpgAgent {
 
-    public static final int MAX_STEPS = 1000; // max steps before game quits
-    public static final int MAX_STEPREC = 20; // max amount of step recordings to take
-    public static final int BEST_STEPREC = 10; // max amount of step recordings to take after fitness
-    public static final int STEPREC_DIF = 20; // number of frames to take off of step rec
-    public static final int DEF_EPS = 1; // default number of episodes per individual
-    public static final int DEF_REPS = 6; // default number of reps per set for sequences
-    public static final boolean QUICKIE = true; // whether to do single frame episodes
-    
     public static enum LevelType{SingleLevel, FiveLevel};
     public static enum TrainType{DeathSequence, AllLevels, LevelPerGen, MultiGame};
+    
+    // default values
+    public static int port = 5000;
+    public static boolean debug = true;
+    public static String game = "aliens";
+    public static int generations = 10000;
+    public static LevelType levelType = LevelType.SingleLevel;
+    public static TrainType trainType = TrainType.MultiGame;
+    public static int maxSteps = 1000; // max steps before game quits
+    public static int maxStepRec = 20; // max amount of step recordings to take
+    public static int bestStepRec = 10; // max amount of step recordings to take after fitness
+    public static int stepRecDiff = 20; // number of frames to take off of step rec
+    public static int defEps = 1; // default number of episodes per individual
+    public static int defReps = 6; // default number of reps per set for sequences
+    public static boolean quickie = true; // whether to do single frame episodes
+    public static int threads = 1;
     
     public static Random rand;
 
     public static void main(String[] args) {
-        
-        // default values
-        int port = 5000;
-        boolean debug = true;
-        String game = "aliens";
-        int generations = 10000;
-        LevelType levelType = LevelType.SingleLevel;
-        TrainType trainType = TrainType.MultiGame;
         
         for(String arg : args) {
             if(arg.toLowerCase().startsWith("port=")) {
@@ -73,13 +73,32 @@ public class TpgAgent {
                 }else{
                     trainType = TrainType.DeathSequence; // probably won't ever use anything else
                 }
+            }else if(arg.toLowerCase().startsWith("maxsteps=")) {
+                maxSteps = Integer.parseInt(arg.substring(arg.indexOf("=")));
+            }else if(arg.toLowerCase().startsWith("maxsteprec=")) {
+                maxStepRec = Integer.parseInt(arg.substring(arg.indexOf("=")));
+            }else if(arg.toLowerCase().startsWith("beststeprec=")) {
+                bestStepRec = Integer.parseInt(arg.substring(arg.indexOf("=")));
+            }else if(arg.toLowerCase().startsWith("steprecdiff=")) {
+                stepRecDiff = Integer.parseInt(arg.substring(arg.indexOf("=")));
+            }else if(arg.toLowerCase().startsWith("defeps=")) {
+                defEps = Integer.parseInt(arg.substring(arg.indexOf("=")));
+            }else if(arg.toLowerCase().startsWith("defreps=")) {
+                defReps = Integer.parseInt(arg.substring(arg.indexOf("=")));
+            }else if(arg.toLowerCase().startsWith("threads=")) {
+                threads = Integer.parseInt(arg.substring(arg.indexOf("=")));
             }
         }
         rand = new Random(55);
         
         System.out.println("Starting TPG on " + "port: " + port + ", debug: " + debug + ", game: " + game
                 + ", generations: " + generations + ", LevelType: " + levelType.toString() + ", TrainType: " + trainType.toString());
-        runTpg(port, debug, game, generations, levelType, trainType);
+        
+        if(threads == 1) {
+            runTpg();
+        }else {
+            runTpgMultiThread();
+        }
     }
     
     public static void runTpg(int port, boolean debug, String gameName, 
@@ -233,6 +252,11 @@ public class TpgAgent {
         }
     }
     
+    public static void runGensMultiGameMultiThread(int gens, boolean render, 
+            HashMap<String, String[]> lvlIds, HashMap<String, long[]> numsActions, TPGLearn agent) {
+        
+    }
+    
     public static void runGenerationsMultiGame(int gens, boolean render, 
             HashMap<String, String[]> lvlIds, HashMap<String, long[]> numsActions,TPGLearn agent) {
         
@@ -252,7 +276,7 @@ public class TpgAgent {
         for(int gen = 0; gen < gens; gen++) {
             System.out.println("==================================================");
             System.out.println("Starting Generation #" + (gen + 1));
-            int rep = gen % DEF_REPS;
+            int rep = gen % defReps;
             
             Float[] fitnesses = new Float[agent.remainingTeams()]; // track fitness of all individuals per gen
             
@@ -330,28 +354,28 @@ public class TpgAgent {
                             rwd += step.reward;
                         }
                         info = step.info;
-                        if(QUICKIE || stepC >= MAX_STEPS) {
+                        if(quickie || stepC >= maxSteps) {
                             break;
                         }
                         
                         // print progression level
-                        if(stepC == Math.floor((MAX_STEPS / 10)*1)){
+                        if(stepC == Math.floor((maxSteps / 10)*1)){
                             System.out.println("10%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*2)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*2)){
                             System.out.println("20%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*3)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*3)){
                             System.out.println("30%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*4)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*4)){
                             System.out.println("40%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*5)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*5)){
                             System.out.println("50%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*6)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*6)){
                             System.out.println("60%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*7)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*7)){
                             System.out.println("70%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*8)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*8)){
                             System.out.println("80%");
-                        }else if(stepC == Math.floor((MAX_STEPS / 10)*9)){
+                        }else if(stepC == Math.floor((maxSteps / 10)*9)){
                             System.out.println("90%");
                         }
                     } // episode done
@@ -383,7 +407,7 @@ public class TpgAgent {
                 // take only up a certain amount
                 try {
                     Collections.shuffle(stepSeqs); // randomize
-                    stepSeqs = new ArrayList<ArrayList<Integer>>(stepSeqs.subList(0, MAX_STEPREC));
+                    stepSeqs = new ArrayList<ArrayList<Integer>>(stepSeqs.subList(0, maxStepRec));
                 }catch(Exception e) {
                     System.out.println("Oof!");
                 }
@@ -435,10 +459,10 @@ public class TpgAgent {
                 int taken = 0;
                 for(int j = 0; j < idxs.length; j++) {
                     int i = idxs[j];
-                    if(fitnesses.length - epLosses[i] > 0 && taken < BEST_STEPREC) {
+                    if(fitnesses.length - epLosses[i] > 0 && taken < bestStepRec) {
                         stepSeqs.add(stepSeqsCopy.get(i));
                         taken++;
-                    }else if(taken >= BEST_STEPREC) {
+                    }else if(taken >= bestStepRec) {
                         break;
                     }
                 }
@@ -461,7 +485,7 @@ public class TpgAgent {
         // rep 0 : each individual plays full sequence, save those that agent loses in (not oot)
         // rep 1 : each individual plays all saved sequences to decide which are better for training
         // rep 2+: each individual plays all good training sequences
-        int seqReps = DEF_REPS;
+        int seqReps = defReps;
         
         // record steps (which are sequences)
         ArrayList<ArrayList<Integer>> stepSeqs = new ArrayList<ArrayList<Integer>>();
@@ -489,7 +513,7 @@ public class TpgAgent {
                 epLosses = new int[stepSeqs.size()];
             }
             
-            int eps = DEF_EPS; // default number of episodes
+            int eps = defEps; // default number of episodes
             if(rep > 0 && stepSeqs.size() > 0) {
                 eps = stepSeqs.size(); // 1 episode per sequence
             }
@@ -540,7 +564,7 @@ public class TpgAgent {
                             rwd += step.reward;
                         }
                         info = step.info;
-                        if(QUICKIE || stepC >= MAX_STEPS) {
+                        if(quickie || stepC >= maxSteps) {
                             break;
                         }
                     } // episode done
@@ -601,13 +625,13 @@ public class TpgAgent {
     public static void fixSequence(ArrayList<ArrayList<Integer>> stepSeqs, Object info) {
         int stepSeqEnd = stepSeqs.size()-1; // last index
         
-        if(stepSeqs.get(stepSeqEnd).size() > STEPREC_DIF) { // chop off end from sequence
+        if(stepSeqs.get(stepSeqEnd).size() > stepRecDiff) { // chop off end from sequence
             stepSeqs.set(stepSeqEnd, new ArrayList<Integer>(
                     stepSeqs.get(stepSeqEnd).subList(
-                            0, stepSeqs.get(stepSeqEnd).size()-STEPREC_DIF)));
-        }else if(stepSeqs.get(stepSeqEnd).size() <= STEPREC_DIF) { // sequence from start
+                            0, stepSeqs.get(stepSeqEnd).size()-stepRecDiff)));
+        }else if(stepSeqs.get(stepSeqEnd).size() <= stepRecDiff) { // sequence from start
             stepSeqs.set(stepSeqEnd, new ArrayList<Integer>());
-        }else if(stepSeqs.get(stepSeqEnd).size() == MAX_STEPS || didIWin(info)) { // remove if win or end
+        }else if(stepSeqs.get(stepSeqEnd).size() == maxSteps || didIWin(info)) { // remove if win or end
             stepSeqs.remove(stepSeqEnd);
         }
     }
