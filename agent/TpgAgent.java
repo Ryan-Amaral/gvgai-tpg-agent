@@ -45,10 +45,11 @@ public class TpgAgent {
     public static int defReps = 6; // default number of reps per set for sequences
     public static boolean quickie = true; // whether to do single frame episodes
     public static int threads = 1;
+    public static int defLevel = 0;
     
     public static Random rand;
 
-    public static void main(String[] args) {
+    public static void mainn(String[] args) {
         
         for(String arg : args) {
             if(arg.toLowerCase().startsWith("port=")) {
@@ -74,19 +75,23 @@ public class TpgAgent {
                     trainType = TrainType.DeathSequence; // probably won't ever use anything else
                 }
             }else if(arg.toLowerCase().startsWith("maxsteps=")) {
-                maxSteps = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                maxSteps = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("maxsteprec=")) {
-                maxStepRec = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                maxStepRec = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("beststeprec=")) {
-                bestStepRec = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                bestStepRec = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("steprecdiff=")) {
-                stepRecDiff = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                stepRecDiff = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("defeps=")) {
-                defEps = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                defEps = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("defreps=")) {
-                defReps = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                defReps = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
+            }else if(arg.toLowerCase().startsWith("quickie=")) {
+                debug = Boolean.parseBoolean(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("threads=")) {
-                threads = Integer.parseInt(arg.substring(arg.indexOf("=")));
+                threads = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
+            }else if(arg.toLowerCase().startsWith("deflevel=")) {
+                defLevel = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }
         }
         rand = new Random(55);
@@ -101,8 +106,40 @@ public class TpgAgent {
         }
     }
     
-    public static void runTpg(int port, boolean debug, String gameName, 
-            int generations, LevelType levelType, TrainType trainType) {
+    public static void runTpgMultiThread() {
+        boolean wtf; // write to file
+        boolean render;
+        
+        if(debug) {
+            wtf = false;
+            render = true;
+        }else {
+            wtf = true;
+            render = false;
+        }
+        
+        // write to file instead of console to record stuff
+        if(wtf) {
+            if(trainType != TrainType.MultiGame) {
+                wtf(game);
+            }else {
+                wtf("multigame");
+            }
+        }
+        
+        GymJavaHttpClient.baseUrl = "http://127.0.0.1:" + String.valueOf(port);
+        
+        // set up tpg agent
+        TPGAlgorithm tpgAlg = new TPGAlgorithm("parameters.arg", "learn");
+        TPGLearn tpg = setupTpgLearn(6, tpgAlg); // 6 actions in gvgai
+        
+        String[] games = game.split(",");
+        HashMap<String,String[][]> lvlIds = getLevelsIdsMultiThread(games, levelType);
+        HashMap<String,long[]> numsActions = getNumsActionsMapMultiThread(lvlIds);
+        //runGensMultiThread(render, lvlIds, numsActions, tpg);
+    }
+    
+    public static void runTpg() {
         
         boolean wtf; // write to file
         boolean render;
@@ -118,7 +155,7 @@ public class TpgAgent {
         // write to file instead of console to record stuff
         if(wtf) {
             if(trainType != TrainType.MultiGame) {
-                wtf(gameName);
+                wtf(game);
             }else {
                 wtf("multigame");
             }
@@ -131,12 +168,12 @@ public class TpgAgent {
         TPGLearn tpg = setupTpgLearn(6, tpgAlg); // 6 actions in gvgai
         
         if(trainType == TrainType.MultiGame) {
-            String[] games = gameName.split(",");
+            String[] games = game.split(",");
             HashMap<String,String[]> lvlIds = getLevelsIds(games, levelType);
             HashMap<String,long[]> numsActions = getNumsActionsMap(lvlIds);
             runGenerationsMultiGame(generations, render, lvlIds, numsActions, tpg);
         } else {
-            String[] lvlIds = getLevelIds(gameName, levelType); // store IDs of create level environments
+            String[] lvlIds = getLevelIds(game, levelType); // store IDs of create level environments
             long[] numsActions = getNumsActions(lvlIds); // number of action that can be performed in the environment
             if(trainType == TrainType.DeathSequence) {
                 runGenerationsDeathSequence(generations, render, lvlIds, numsActions, tpg);
@@ -207,6 +244,31 @@ public class TpgAgent {
         return levelsIds;
     }
     
+    public static HashMap<String,String[][]> getLevelsIdsMultiThread(String[] gameNames, LevelType levelType) {
+        HashMap<String,String[][]> levelsIds = new HashMap<String,String[][]>();
+        if(levelType == LevelType.FiveLevel) {
+            for(String game : gameNames) {
+                String[][] lvls = new String[5][threads];
+                for(int lvl = 0; lvl < 5; lvl++) {
+                    for(int thrd = 0; thrd < threads; thrd++) {
+                        lvls[lvl][thrd] = GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl" + lvl + "-v0");
+                    }
+                }
+                levelsIds.put(game, lvls);
+            }
+        }else if(levelType == LevelType.SingleLevel) {
+            for(String game : gameNames) {
+                String[][] lvls = new String[1][threads];
+                for(int thrd = 0; thrd < threads; thrd++) {
+                    lvls[0][thrd] = GymJavaHttpClient.createEnv("gvgai-" + game + "-lvl" + defLevel + "-v0");
+                }
+                levelsIds.put(game, lvls);
+            }
+        }
+        
+        return levelsIds;
+    }
+    
     public static long[] getNumsActions(String[] lvlIds) {
         long[] numsActions = new long[lvlIds.length];
         for(int i = 0; i < lvlIds.length; i++) {
@@ -223,6 +285,21 @@ public class TpgAgent {
         for(String game : games) {
             // get actionspace of first level in each game
             long[] actions = new long[GymJavaHttpClient.actionSpaceSize((JSONObject)GymJavaHttpClient.actionSpace(lvlIds.get(game)[0]))];
+            for(int i = 0; i < actions.length; i++) {
+                actions[i] = (long)i;
+            }
+            numsActions.put(game, actions);
+        }
+        // heyyyyyyyyyy
+        return numsActions;
+    }
+    
+    public static HashMap<String,long[]> getNumsActionsMapMultiThread(HashMap<String,String[][]> lvlIds) {
+        Set<String> games = lvlIds.keySet();
+        HashMap<String,long[]> numsActions = new HashMap<String,long[]>();
+        for(String game : games) {
+            // get actionspace of first level in each game
+            long[] actions = new long[GymJavaHttpClient.actionSpaceSize((JSONObject)GymJavaHttpClient.actionSpace(lvlIds.get(game)[0][0]))];
             for(int i = 0; i < actions.length; i++) {
                 actions[i] = (long)i;
             }
@@ -252,7 +329,7 @@ public class TpgAgent {
         }
     }
     
-    public static void runGensMultiGameMultiThread(int gens, boolean render, 
+    public static void runGensMultiThread(boolean render, 
             HashMap<String, String[]> lvlIds, HashMap<String, long[]> numsActions, TPGLearn agent) {
         
     }

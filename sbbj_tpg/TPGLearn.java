@@ -523,6 +523,7 @@ public class TPGLearn {
             for (String label : labels) {
                 // When updating the outcome object value, if this Team didn't receive a reward
                 // for the label, something is broken
+                System.out.println(team.outcomes.keySet().toString());
                 if (!team.getOutcome(label, outcome))
                     throw new RuntimeException("Cannot find outcome " + label + " on a Team during selection.");
 

@@ -25,7 +25,7 @@ public class Team implements Comparable<Team>
 	// The number of Learners currently referencing this Team
 	protected int learnerReferenceCount = 0;
 	
-	protected int genId; // Id of the team in current generation for parallelization purposes
+	public int genId; // Id of the team in current generation for parallelization purposes
 		
 	// Reconstruct a Team from primary data. WE'VE CREATED A MONSTER!
 	public Team( long ID, long birthday, double key, ArrayList<Learner> learners, HashMap<String, Double> outcomes )
