@@ -2,6 +2,7 @@
 !.gitignore
 !README.md
 !agent
-!agent/TpgAgent.java
+!agent/*
+agent/SampleAgent.java
 !sbbj_tpg
 !sbbj_tpg/*
