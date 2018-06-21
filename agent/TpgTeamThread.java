@@ -12,12 +12,14 @@ public class TpgTeamThread extends NotifyingThread {
     public Team team;
     public float score;
     public String lvl;
+    public GymJavaHttpClient client;
     public static boolean start = false;
     public boolean isDone = false;
     
-    public TpgTeamThread(Team team, String lvl) {
+    public TpgTeamThread(Team team, String lvl, GymJavaHttpClient client) {
         this.team = team;
         this.lvl = lvl;
+        this.client = client;
     }
     
     public void doRun() {
@@ -28,9 +30,9 @@ public class TpgTeamThread extends NotifyingThread {
         score = 0;
         for(int ep = 0; ep < TpgAgentParallel.eps; ep++) {
             float rwd = 0;
-            System.out.println("attempting to reset env");
-            Object obs = GymJavaHttpClient.resetEnv(lvl); // reset the environment
-            System.out.println("successfully reset env");
+            //System.out.println("attempting to reset env");
+            Object obs = client.resetEnv1(lvl); // reset the environment
+            //System.out.println("successfully reset env");
             Boolean isDone = false; // whether current episode is done
             int action; // action for agent to do
             int stepC = 0; // stepCounter
@@ -60,7 +62,7 @@ public class TpgTeamThread extends NotifyingThread {
                     action = TpgAgentParallel.stepSeqs.get(ep).get(stepC-1);
                 }
                 
-                StepObject step = GymJavaHttpClient.stepEnv(lvl, action, true, TpgAgentParallel.debug);
+                StepObject step = client.stepEnv1(lvl, action, true, TpgAgentParallel.debug);
                 obs = step.observation;
                 isDone = step.done;
                 if(!isAutopilot) {

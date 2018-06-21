@@ -6,3 +6,5 @@
 agent/SampleAgent.java
 !sbbj_tpg
 !sbbj_tpg/*
+!javaclient
+!javaclient/*

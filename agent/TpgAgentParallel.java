@@ -29,7 +29,7 @@ public class TpgAgentParallel {
     
     // default values for arguments
     public static int port = 5000;
-    public static boolean debug = true;
+    public static boolean debug = false;
     public static String game = "aliens";
     public static int generations = 10000;
     public static LevelType levelType = LevelType.SingleLevel;
@@ -40,8 +40,8 @@ public class TpgAgentParallel {
     public static int stepRecDiff = 20; // number of frames to take off of step rec
     public static int defEps = 1; // default number of episodes per individual
     public static int defReps = 6; // default number of reps per set for sequences
-    public static boolean quickie = true; // whether to do single frame episodes
-    public static int threads = 2;
+    public static boolean quickie = false; // whether to do single frame episodes
+    public static int threads = 3;
     public static int defLevel = 0;
     
     
@@ -67,6 +67,8 @@ public class TpgAgentParallel {
     public static int eps;
     public static String genSummaries = "";
     public static HashMap<Team,HashMap<String,Float>> rewardMap;
+    public static GymJavaHttpClient[] clients;
+    public static LinkedList<GymJavaHttpClient> availableClients;
 
     public static void main(String[] args) {
         
@@ -147,6 +149,11 @@ public class TpgAgentParallel {
         
         gameQueue = getGameQueue(new ArrayList<String>(Arrays.asList(games)));
         
+        clients = new GymJavaHttpClient[threads];
+        for(int i = 0; i < threads; i++) {
+            clients[i] = new GymJavaHttpClient();
+        }
+        
         startNewGeneration();
     }
     
@@ -173,6 +180,7 @@ public class TpgAgentParallel {
         }
         
         availableLvls = new LinkedList<String>(Arrays.asList(lvlIds.get(game)[lvlIdx]));
+        availableClients = new LinkedList<GymJavaHttpClient>(Arrays.asList(clients));
         
         System.out.println("On Game: " + game);
         System.out.println("On Level: " + lvlIdx);
@@ -193,7 +201,8 @@ public class TpgAgentParallel {
         teamThreads = new HashMap<Long, TpgTeamThread>();
         for(int i = 0; i < threads; i++) {
             if(tpg.remainingTeams() > 0) {
-                TpgTeamThread newThread = new TpgTeamThread(tpg.getCurTeam(), availableLvls.removeFirst());
+                TpgTeamThread newThread = new TpgTeamThread(
+                        tpg.getCurTeam(), availableLvls.removeFirst(), availableClients.removeFirst());
                 newThread.addListener(threadListener);
                 teamThreads.put(newThread.getId(), newThread); // put new thread in
                 newThread.start();
@@ -247,6 +256,7 @@ public class TpgAgentParallel {
         // check if still teams to run this generation
         if(tpg.remainingTeams() > 0) {
             availableLvls.add(teamThreads.get(thread.getId()).lvl); // put lvl back in the running
+            availableClients.add(teamThreads.get(thread.getId()).client); // get client back
             rerunThread(teamThreads.get(thread.getId())); // rerun the thread with new team
         }else if(allThreadsDone()) {
             endGeneration();
@@ -285,7 +295,8 @@ public class TpgAgentParallel {
     public static void rerunThread(TpgTeamThread thread) {
         if(tpg.remainingTeams() > 0) { // start thread only if still teams left
             teamThreads.remove(thread.getId()); // get rid of old thread
-            TpgTeamThread newThread = new TpgTeamThread(tpg.getCurTeam(), availableLvls.removeFirst());
+            TpgTeamThread newThread = new TpgTeamThread(
+                    tpg.getCurTeam(), availableLvls.removeFirst(), availableClients.removeFirst());
             newThread.addListener(threadListener);
             teamThreads.put(newThread.getId(), newThread); // put new thread in
             newThread.start();
@@ -338,10 +349,6 @@ public class TpgAgentParallel {
                         idxs[j] = swpi;
                     }
                 }
-            }
-            //delet
-            for(int i = 0; i < fitness.length; i++) {
-                System.out.print(fitness[i] + " ");
             }
             ArrayList<ArrayList<Integer>> stepSeqsCopy = stepSeqs;
             stepSeqs = new ArrayList<ArrayList<Integer>>();
