@@ -39,6 +39,7 @@ public class GymJavaHttpClient {
      * @return The instance id of the created environment.
      */
     public static String createEnv(String envId) {
+
         connect("/v1/envs/", "POST", "{\"env_id\":\"" + envId + "\"}");
         return getJson().getString("instance_id");
     }
@@ -95,7 +96,6 @@ public class GymJavaHttpClient {
                     ", \"render\":" + Boolean.toString(render) + "}");
         }
         JSONObject jobj = getJson1();
-        
         return new StepObject(
                 jobj.get("observation"), jobj.getFloat("reward"), 
                 jobj.getBoolean("done"), jobj.get("info"));
@@ -238,6 +238,9 @@ public class GymJavaHttpClient {
             scanner.close();
         } catch (IOException e) {
             e.printStackTrace();
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
         }
 
         return json;
@@ -271,13 +274,19 @@ public class GymJavaHttpClient {
     private void connect1(String urlEx, String mthd, String args) {
         try {
             URL url = new URL(baseUrl + urlEx);
+            //start = System.nanoTime();
             con1 = (HttpURLConnection) (url).openConnection();
+            //System.out.println("Open Connection Time: " + (System.nanoTime() - start));
+            //start = System.nanoTime();
             con1.setRequestMethod(mthd);
+            //System.out.println("Request Method Time: " + (System.nanoTime() - start));
             if (mthd.equals("POST")) {
                 con1.setDoOutput(true);
                 con1.setRequestProperty("Content-Type", "application/json");
                 con1.setRequestProperty("Accept", "application/json");
+                //start = System.nanoTime();
                 DataOutputStream wr = new DataOutputStream(con1.getOutputStream());
+                //System.out.println("Output Stream Time: " + (System.nanoTime() - start));
                 wr.writeBytes(args);
                 wr.flush();
                 wr.close();

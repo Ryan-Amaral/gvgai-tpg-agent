@@ -106,6 +106,7 @@ public class Learner {
 	        regNum = 0;
 	        register = registersArray[rootTeamNum][0];
 	    }
+	    
 		for (int i = 0; i < register.length; i++) {
 		    registersArray[rootTeamNum][regNum][i] = 0;
 		}

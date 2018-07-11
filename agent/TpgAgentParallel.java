@@ -12,6 +12,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Random;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import org.json.JSONObject;
 
@@ -29,7 +31,7 @@ public class TpgAgentParallel {
     
     // default values for arguments
     public static int port = 5000;
-    public static boolean debug = false;
+    public static boolean debug = true;
     public static String game = "aliens";
     public static int generations = 10000;
     public static LevelType levelType = LevelType.SingleLevel;
@@ -40,7 +42,7 @@ public class TpgAgentParallel {
     public static int stepRecDiff = 20; // number of frames to take off of step rec
     public static int defEps = 1; // default number of episodes per individual
     public static int defReps = 6; // default number of reps per set for sequences
-    public static boolean quickie = false; // whether to do single frame episodes
+    public static boolean quickie = true; // whether to do single frame episodes
     public static int threads = 3;
     public static int defLevel = 0;
     
@@ -69,8 +71,14 @@ public class TpgAgentParallel {
     public static HashMap<Team,HashMap<String,Float>> rewardMap;
     public static GymJavaHttpClient[] clients;
     public static LinkedList<GymJavaHttpClient> availableClients;
+    public static TimerTask threadChecker;
+    public static Timer threadCheckerTimer;
+    
+    private static long startTime;
 
     public static void main(String[] args) {
+        
+        System.out.println("Processors Available: " + Runtime.getRuntime().availableProcessors());
         
         for(String arg : args) {
             if(arg.toLowerCase().startsWith("port=")) {
@@ -154,7 +162,13 @@ public class TpgAgentParallel {
             clients[i] = new GymJavaHttpClient();
         }
         
+        startTime = System.currentTimeMillis();
+        
         startNewGeneration();
+        
+        threadChecker = new ThreadChecker();
+        threadCheckerTimer = new Timer(true);
+        threadCheckerTimer.scheduleAtFixedRate(threadChecker, new Date(), 60000); // check every minute
     }
     
     public static void startNewGeneration() {
@@ -369,6 +383,9 @@ public class TpgAgentParallel {
         System.out.println("Fitness Summary:\n" + genSummaries);
         
         applyRewards(); // give rewards
+        
+
+        System.out.println("Ellapsed Seconds: " + (long)(System.currentTimeMillis() - startTime)/1000);
     }
     
     // give reward here instead of in individual threads for concurrency sake.
@@ -392,5 +409,24 @@ public class TpgAgentParallel {
         }else if(stepSeqs.get(stepSeqEnd).size() == maxSteps || TpgAgent.didIWin(info)) { // remove if win or end
             stepSeqs.remove(stepSeqEnd);
         }
+    }
+
+    public static boolean checkAllTeamsDone() {
+        int size = -1;
+        if(rewardMap.isEmpty()) {
+            return false;
+        }
+        for(Team team : rewardMap.keySet()) {
+            if(size == -1) {
+                if (rewardMap.get(team) == null) {
+                    return false;
+                }
+                size = rewardMap.get(team).size();
+            }else if(rewardMap.get(team) == null || 
+                    size != rewardMap.get(team).size() || size == 0){
+               return false;
+            }
+        }
+        return false;
     }
 }

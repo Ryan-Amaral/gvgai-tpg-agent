@@ -771,6 +771,11 @@ public class TpgAgent {
     }
     
     public static String getSummary(Float[] fitnesses) {
+        for(int i = 0; i < fitnesses.length; i++) {
+            if(fitnesses[i] == null) {
+                fitnesses[i] = 0f; // but why?????
+            }
+        }
         return Collections.min(Arrays.asList(fitnesses)).toString() + ","
                 + Collections.max(Arrays.asList(fitnesses)).toString() + ","
                 + getAvg(fitnesses).toString() + "\n";

@@ -48,7 +48,6 @@ public class TpgTeamThread extends NotifyingThread {
                     if(isAutopilot) {
                         isAutopilot = false;
                     }
-                    
                     action = (int) TpgAgentParallel.tpg.participate(team, TpgAgent.getFeatures(obs), TpgAgentParallel.curActions); // tpg chooses
                     
                     // record steps if rep 0, new sequence on first step
@@ -86,6 +85,8 @@ public class TpgTeamThread extends NotifyingThread {
                 }
             }
         }// end ep loop
+        score /= TpgAgentParallel.eps;
+        
         isDone = true;
     }
 }
