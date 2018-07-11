@@ -3,10 +3,14 @@ package agent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Random;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+
 import org.json.JSONObject;
 
 import javaclient.GymJavaHttpClient;
@@ -42,9 +46,8 @@ public class TpgAgentParallel {
     
     // Stuff for parallelization
     public static int gen;
-    public static HashMap<Long,TpgTeamThread> teamThreads;
+    public static TpgTeamThread[] teamThreads;
     public static TPGLearn tpg;
-    public static TpgTeamThreadCompleteListener threadListener;
     public static int rep;
     public static Float[] fitnesses;
     public static LinkedList<String> gameQueue;
@@ -53,14 +56,13 @@ public class TpgAgentParallel {
     public static String[] games;
     public static long[] curActions;
     public static int lvlIdx;
-    public static LinkedList<String> availableLvls; // lvls that a thread can take
     public static int[] epLosses;
     public static ArrayList<ArrayList<Integer>> stepSeqs;
     public static int eps;
     public static String genSummaries = "";
     public static HashMap<Team,HashMap<String,Float>> rewardMap;
-    public static GymJavaHttpClient[] clients;
-    public static LinkedList<GymJavaHttpClient> availableClients;
+    public static TimerTask threadChecker;
+    public static Timer threadCheckerTimer;
     
     private static long startTime;
 
@@ -122,7 +124,6 @@ public class TpgAgentParallel {
     public static void setupTpgParallel() {
         
         gen = 0;
-        threadListener = new TpgTeamThreadCompleteListener();
         
         // write to file instead of console to record stuff if not debugging
         if(!debug) {
@@ -145,12 +146,11 @@ public class TpgAgentParallel {
         
         gameQueue = getGameQueue(new ArrayList<String>(Arrays.asList(games)));
         
-        clients = new GymJavaHttpClient[threads];
-        for(int i = 0; i < threads; i++) {
-            clients[i] = new GymJavaHttpClient();
-        }
-        
         startTime = System.currentTimeMillis();
+        
+        threadChecker = new ThreadChecker();
+        threadCheckerTimer = new Timer(true);
+        threadCheckerTimer.scheduleAtFixedRate(threadChecker, new Date(), 120000); // check every few seconds
         
         startNewGeneration();
     }
@@ -177,9 +177,6 @@ public class TpgAgentParallel {
             stepSeqs = new ArrayList<ArrayList<Integer>>();
         }
         
-        availableLvls = new LinkedList<String>(Arrays.asList(lvlIds.get(game)[lvlIdx]));
-        availableClients = new LinkedList<GymJavaHttpClient>(Arrays.asList(clients));
-        
         System.out.println("On Game: " + game);
         System.out.println("On Level: " + lvlIdx);
         
@@ -195,18 +192,70 @@ public class TpgAgentParallel {
         }
         
         TpgTeamThread.start = false;
-        // add all the threads
-        teamThreads = new HashMap<Long, TpgTeamThread>();
+
+        teamThreads = new TpgTeamThread[threads];
+        // start threads on right levels
         for(int i = 0; i < threads; i++) {
+            TpgTeamThread newThread = new TpgTeamThread(new GymJavaHttpClient(), i);
+            teamThreads[i] = newThread; // put new thread in
+            newThread.start();
             if(tpg.remainingTeams() > 0) {
-                TpgTeamThread newThread = new TpgTeamThread(
-                        tpg.getCurTeam(), availableLvls.removeFirst(), availableClients.removeFirst());
-                newThread.addListener(threadListener);
-                teamThreads.put(newThread.getId(), newThread); // put new thread in
-                newThread.start();
+                teamThreads[i].lvl = lvlIds.get(game)[lvlIdx][i];
+                teamThreads[i].renew(tpg.getCurTeam());
             }
         }
         TpgTeamThread.start = true; // actually start threads
+    }
+    
+    /**
+     * 
+     * @param id
+     * @return Whether the calling thread should die.
+     */
+    public static synchronized boolean threadIsDone(int id) {
+        reportTeamResult(teamThreads[id]);
+        teamThreads[id].superDone = true;
+        // check if still teams to run this generation
+        if(tpg.remainingTeams() > 0) {
+            teamThreads[id].renew(tpg.getCurTeam());
+            return false;
+        }else if(checkAllThreadsDone()) {
+            endGeneration();
+            if(gen < generations) { // start next generation
+                tpg.selection();
+                tpg.generateNewTeams();
+                tpg.nextEpoch();
+                startNewGeneration();
+            }else { // totally done
+                // stub
+            }
+        }
+        return true;
+    }
+    
+    public static boolean checkAllThreadsDone() {
+        for(int i = 0; i < threads; i++) {
+            if(!teamThreads[i].superDone) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static void checkAllThreadsWorking() {
+        for(int i = 0; i < threads; i++) {
+            if(!teamThreads[i].done && !teamThreads[i].actuallyDoingShit) {
+                // recycle thread
+                
+            }
+        }
+    }
+    
+    public static void reportTeamResult(TpgTeamThread thread) {
+        fitnesses[thread.team.genId] = thread.score;
+        System.out.println("Average Score: " + thread.score);
+        System.out.println("That was for Team: " + thread.team.genId);
+        System.out.println(" ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~");
     }
     
     public static HashMap<String,String[][]> getLevelsIdsParallel(String[] gameNames, LevelType levelType) {
@@ -248,65 +297,10 @@ public class TpgAgentParallel {
         // heyyyyyyyyyy
         return numsActions;
     }
-
-    public static synchronized void onTeamThreadComplete(Thread thread) {
-        reportTeamResult(teamThreads.get(thread.getId()));
-        teamThreads.get(thread.getId()).isDone = true; // mark as done after finish report
-        // check if still teams to run this generation
-        if(tpg.remainingTeams() > 0) {
-            availableLvls.add(teamThreads.get(thread.getId()).lvl); // put lvl back in the running
-            availableClients.add(teamThreads.get(thread.getId()).client); // get client back
-            rerunThread(teamThreads.get(thread.getId())); // rerun the thread with new team
-        }else if(allThreadsDone()) {
-            endGeneration();
-            if(gen < generations) { // start next generation
-                tpg.selection();
-                tpg.generateNewTeams();
-                tpg.nextEpoch();
-                startNewGeneration();
-            }else { // totally done
-                // stub
-            }
-        }
-    }
-    
-    public static void reportTeamResult(TpgTeamThread thread) {
-        fitnesses[thread.team.genId] = thread.score;
-        System.out.println("Average Score: " + thread.score);
-        System.out.println("That was for Team: " + thread.team.genId);
-        System.out.println(" ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~");
-    }
-    
-    public static boolean allThreadsDone() {
-        for(Long key : teamThreads.keySet()) {
-            if(!teamThreads.get(key).isDone) {
-                return false;
-            }
-        }
-        int threads = teamThreads.size();
-        // most disgusting for loop ever, but I had to
-        for(int i = 0; i < threads; i++) {
-            long id = (long) teamThreads.keySet().toArray()[0];
-            teamThreads.get(id).plzKillMe = true;
-            teamThreads.remove(id);
-        }
-        return true;
-    }
     
     public static LinkedList<String> getGameQueue(ArrayList<String> keys) {
         Collections.shuffle(keys);
         return new LinkedList<String>(keys);
-    }
-    
-    public static void rerunThread(TpgTeamThread thread) {
-        if(tpg.remainingTeams() > 0) { // start thread only if still teams left
-            teamThreads.remove(thread.getId()); // get rid of old thread
-            TpgTeamThread newThread = new TpgTeamThread(
-                    tpg.getCurTeam(), availableLvls.removeFirst(), availableClients.removeFirst());
-            newThread.addListener(threadListener);
-            teamThreads.put(newThread.getId(), newThread); // put new thread in
-            newThread.start();
-        }
     }
 
     public static void endGeneration() {
