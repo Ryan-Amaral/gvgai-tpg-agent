@@ -14,7 +14,7 @@ public class TpgTeamThread extends NotifyingThread {
     public String lvl;
     public GymJavaHttpClient client;
     public static boolean start = false;
-    public boolean isDone = false;
+    public boolean isDone = true;
     
     public TpgTeamThread(Team team, String lvl, GymJavaHttpClient client) {
         this.team = team;
@@ -25,7 +25,12 @@ public class TpgTeamThread extends NotifyingThread {
     public void doRun() {
         while(!start) { // needed to avoid concurrent modification in main class
             // do nothing until can start
+            if(plzKillMe) {
+                return;
+            }
         }
+        
+        isDone = false;
         
         score = 0;
         for(int ep = 0; ep < TpgAgentParallel.eps; ep++) {
@@ -86,7 +91,5 @@ public class TpgTeamThread extends NotifyingThread {
             }
         }// end ep loop
         score /= TpgAgentParallel.eps;
-        
-        isDone = true;
     }
 }

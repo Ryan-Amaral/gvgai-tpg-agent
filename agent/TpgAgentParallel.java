@@ -1,24 +1,14 @@
 package agent;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.PrintStream;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Random;
 import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
-
 import org.json.JSONObject;
 
-import agent.TpgAgent.LevelType;
-import agent.TpgAgent.TrainType;
 import javaclient.GymJavaHttpClient;
 import sbbj_tpg.TPGAlgorithm;
 import sbbj_tpg.TPGLearn;
@@ -71,8 +61,6 @@ public class TpgAgentParallel {
     public static HashMap<Team,HashMap<String,Float>> rewardMap;
     public static GymJavaHttpClient[] clients;
     public static LinkedList<GymJavaHttpClient> availableClients;
-    public static TimerTask threadChecker;
-    public static Timer threadCheckerTimer;
     
     private static long startTime;
 
@@ -165,10 +153,6 @@ public class TpgAgentParallel {
         startTime = System.currentTimeMillis();
         
         startNewGeneration();
-        
-        threadChecker = new ThreadChecker();
-        threadCheckerTimer = new Timer(true);
-        threadCheckerTimer.scheduleAtFixedRate(threadChecker, new Date(), 60000); // check every minute
     }
     
     public static void startNewGeneration() {
@@ -265,8 +249,9 @@ public class TpgAgentParallel {
         return numsActions;
     }
 
-    public static void onTeamThreadComplete(Thread thread) {
+    public static synchronized void onTeamThreadComplete(Thread thread) {
         reportTeamResult(teamThreads.get(thread.getId()));
+        teamThreads.get(thread.getId()).isDone = true; // mark as done after finish report
         // check if still teams to run this generation
         if(tpg.remainingTeams() > 0) {
             availableLvls.add(teamThreads.get(thread.getId()).lvl); // put lvl back in the running
@@ -297,6 +282,13 @@ public class TpgAgentParallel {
             if(!teamThreads.get(key).isDone) {
                 return false;
             }
+        }
+        int threads = teamThreads.size();
+        // most disgusting for loop ever, but I had to
+        for(int i = 0; i < threads; i++) {
+            long id = (long) teamThreads.keySet().toArray()[0];
+            teamThreads.get(id).plzKillMe = true;
+            teamThreads.remove(id);
         }
         return true;
     }
@@ -409,24 +401,5 @@ public class TpgAgentParallel {
         }else if(stepSeqs.get(stepSeqEnd).size() == maxSteps || TpgAgent.didIWin(info)) { // remove if win or end
             stepSeqs.remove(stepSeqEnd);
         }
-    }
-
-    public static boolean checkAllTeamsDone() {
-        int size = -1;
-        if(rewardMap.isEmpty()) {
-            return false;
-        }
-        for(Team team : rewardMap.keySet()) {
-            if(size == -1) {
-                if (rewardMap.get(team) == null) {
-                    return false;
-                }
-                size = rewardMap.get(team).size();
-            }else if(rewardMap.get(team) == null || 
-                    size != rewardMap.get(team).size() || size == 0){
-               return false;
-            }
-        }
-        return false;
     }
 }

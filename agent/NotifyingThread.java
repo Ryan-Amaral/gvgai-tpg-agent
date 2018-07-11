@@ -6,7 +6,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 // https://stackoverflow.com/questions/702415/how-to-know-if-other-threads-have-finished
 public abstract class NotifyingThread extends Thread {
     private final Set<ThreadCompleteListener> listeners = new CopyOnWriteArraySet<ThreadCompleteListener>();
-
+    public boolean plzKillMe;
     public final void addListener(final ThreadCompleteListener listener) {
         listeners.add(listener);
     }
@@ -26,7 +26,9 @@ public abstract class NotifyingThread extends Thread {
         try {
             doRun();
         } finally {
-            notifyListeners();
+            if(!plzKillMe) {
+                notifyListeners();
+            }
         }
     }
 
