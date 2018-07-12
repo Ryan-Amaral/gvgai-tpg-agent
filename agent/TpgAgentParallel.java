@@ -25,19 +25,20 @@ public class TpgAgentParallel {
     
     // default values for arguments
     public static int port = 5000;
-    public static boolean debug = true;
+    public static boolean render = false;
+    public static boolean wtf = false;
     public static String game = "aliens";
-    public static int generations = 10000;
+    public static int generations = 100000;
     public static LevelType levelType = LevelType.SingleLevel;
     public static TrainType trainType = TrainType.MultiGame;
-    public static int maxSteps = 1000; // max steps before game quits
-    public static int maxStepRec = 20; // max amount of step recordings to take
-    public static int bestStepRec = 10; // max amount of step recordings to take after fitness
+    public static int maxSteps = 10; // max steps before game quits
+    public static int maxStepRec = 10; // max amount of step recordings to take
+    public static int bestStepRec = 5; // max amount of step recordings to take after fitness
     public static int stepRecDiff = 20; // number of frames to take off of step rec
     public static int defEps = 1; // default number of episodes per individual
-    public static int defReps = 6; // default number of reps per set for sequences
-    public static boolean quickie = true; // whether to do single frame episodes
-    public static int threads = 3;
+    public static int defReps = 5; // default number of reps per set for sequences
+    public static boolean quickie = false; // whether to do single frame episodes
+    public static int threads = 5;
     public static int defLevel = 0;
     
     
@@ -61,8 +62,6 @@ public class TpgAgentParallel {
     public static int eps;
     public static String genSummaries = "";
     public static HashMap<Team,HashMap<String,Float>> rewardMap;
-    public static TimerTask threadChecker;
-    public static Timer threadCheckerTimer;
     
     private static long startTime;
 
@@ -73,8 +72,10 @@ public class TpgAgentParallel {
         for(String arg : args) {
             if(arg.toLowerCase().startsWith("port=")) {
                 port = Integer.parseInt(arg.substring(5));
-            }else if(arg.toLowerCase().startsWith("debug=")) {
-                debug = Boolean.parseBoolean(arg.substring(6));
+            }else if(arg.toLowerCase().startsWith("render=")) {
+                render = Boolean.parseBoolean(arg.substring(7));
+            }else if(arg.toLowerCase().startsWith("wtf=")) {
+                wtf = Boolean.parseBoolean(arg.substring(4));
             }else if(arg.toLowerCase().startsWith("game=")) {
                 game = arg.substring(5);
             }else if(arg.toLowerCase().startsWith("gens=") || arg.toLowerCase().startsWith("generations=")) {
@@ -106,7 +107,7 @@ public class TpgAgentParallel {
             }else if(arg.toLowerCase().startsWith("defreps=")) {
                 defReps = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("quickie=")) {
-                debug = Boolean.parseBoolean(arg.substring(arg.indexOf("=") + 1));
+                quickie = Boolean.parseBoolean(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("threads=")) {
                 threads = Integer.parseInt(arg.substring(arg.indexOf("=") + 1));
             }else if(arg.toLowerCase().startsWith("deflevel=")) {
@@ -115,8 +116,10 @@ public class TpgAgentParallel {
         }
         rand = new Random(55);
         
-        System.out.println("Starting TPG on " + "port: " + port + ", debug: " + debug + ", game: " + game
-                + ", generations: " + generations + ", LevelType: " + levelType.toString() + ", TrainType: " + trainType.toString());
+        System.out.println("Starting TPG on " + "port: " + port + ", render: " + render + ", wtf: " + wtf + ", game: " + game
+                + ",\n gens: " + generations + ", leveltype: " + levelType.toString() + ", trainrype: " + trainType.toString()
+                + ",\n maxsteps: " + maxSteps + ", maxsteprec: " + maxStepRec + ", beststeprec: " + bestStepRec + ", steprecdiff: " + stepRecDiff
+                + ",\n defeps: " + defEps + ", defreps: " + defReps + ", quickie: " + quickie + ", threads: " + threads + ", deflevel: " + defLevel );
         
         setupTpgParallel();
     }
@@ -126,7 +129,7 @@ public class TpgAgentParallel {
         gen = 0;
         
         // write to file instead of console to record stuff if not debugging
-        if(!debug) {
+        if(wtf) {
             if(trainType != TrainType.MultiGame) {
                 TpgAgent.wtf(game);
             }else {
@@ -147,10 +150,6 @@ public class TpgAgentParallel {
         gameQueue = getGameQueue(new ArrayList<String>(Arrays.asList(games)));
         
         startTime = System.currentTimeMillis();
-        
-        threadChecker = new ThreadChecker();
-        threadCheckerTimer = new Timer(true);
-        threadCheckerTimer.scheduleAtFixedRate(threadChecker, new Date(), 120000); // check every few seconds
         
         startNewGeneration();
     }
@@ -191,20 +190,19 @@ public class TpgAgentParallel {
             eps = stepSeqs.size(); // 1 episode per sequence
         }
         
-        TpgTeamThread.start = false;
-
         teamThreads = new TpgTeamThread[threads];
         // start threads on right levels
         for(int i = 0; i < threads; i++) {
-            TpgTeamThread newThread = new TpgTeamThread(new GymJavaHttpClient(), i);
-            teamThreads[i] = newThread; // put new thread in
-            newThread.start();
+            teamThreads[i] = new TpgTeamThread(new GymJavaHttpClient(), i); // put new thread in
             if(tpg.remainingTeams() > 0) {
                 teamThreads[i].lvl = lvlIds.get(game)[lvlIdx][i];
                 teamThreads[i].renew(tpg.getCurTeam());
             }
         }
-        TpgTeamThread.start = true; // actually start threads
+        // start the threads
+        for(int i = 0; i < threads; i++) {
+            teamThreads[i].start();
+        }
     }
     
     /**
@@ -240,15 +238,6 @@ public class TpgAgentParallel {
             }
         }
         return true;
-    }
-
-    public static void checkAllThreadsWorking() {
-        for(int i = 0; i < threads; i++) {
-            if(!teamThreads[i].done && !teamThreads[i].actuallyDoingShit) {
-                // recycle thread
-                
-            }
-        }
     }
     
     public static void reportTeamResult(TpgTeamThread thread) {

@@ -66,7 +66,7 @@ public class TPGAlgorithm {
 	// Read the arguments from a file and store them in an arguments map
 	public void readArgumentsToMap(String fileName) {
 		arguments.put("seed", "0");
-		arguments.put("teamPopSize", "50");
+		arguments.put("teamPopSize", "360");
 		arguments.put("teamGap", "0.5");
 		arguments.put("probLearnerDelete", "0.7");
 		arguments.put("probLearnerAdd", "0.7");

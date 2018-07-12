@@ -14,7 +14,6 @@ public class TpgTeamThread extends Thread {
     public String lvl;
     public int id;
     public GymJavaHttpClient client;
-    public static boolean start = false;
     public boolean done = false;
     public boolean superDone = false;
     public boolean actuallyDoingShit = false; // need this because stupid thread freezing issue
@@ -35,7 +34,7 @@ public class TpgTeamThread extends Thread {
         while(true) {
             actuallyDoingShit = false;
             // hold back start of execution to avoid concurrency issues
-            while(!start || done) {
+            while(done) {
                 
             }
             
@@ -74,7 +73,7 @@ public class TpgTeamThread extends Thread {
                         action = TpgAgentParallel.stepSeqs.get(ep).get(stepC-1);
                     }
                     
-                    StepObject step = client.stepEnv1(lvl, action, true, TpgAgentParallel.debug);
+                    StepObject step = client.stepEnv1(lvl, action, true, TpgAgentParallel.render);
                     obs = step.observation;
                     isDone = step.done;
                     if(!isAutopilot) {
